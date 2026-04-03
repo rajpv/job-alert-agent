@@ -3,29 +3,39 @@ Job Scraper Module
 Fetches job postings from LinkedIn, Indeed, and Google Jobs
 using the python-jobspy library, then filters for relevance
 and location.
+
+Supports two modes:
+  - General search: broad role-based searches (every 30 min)
+  - Company-targeted search: role + company name (daily)
 """
 
+import time
+import random
 import pandas as pd
 from jobspy import scrape_jobs
 import config
 
 
-def fetch_jobs_for_query(search_term: str, location: str) -> pd.DataFrame:
+def fetch_jobs_for_query(search_term: str, location: str,
+                         hours_old: int = None,
+                         sites: list = None) -> pd.DataFrame:
     """
     Scrape jobs for a single search term and location combination.
     Returns a DataFrame of job postings.
     """
     all_results = []
+    sites = sites or config.SITES
+    hours_old = hours_old or config.HOURS_OLD
 
     # Scrape each site individually so one failure doesn't block others
-    for site in config.SITES:
+    for site in sites:
         try:
             kwargs = {
                 "site_name": [site],
                 "search_term": search_term,
                 "location": location,
                 "results_wanted": config.RESULTS_WANTED,
-                "hours_old": config.HOURS_OLD,
+                "hours_old": hours_old,
                 "country_indeed": config.COUNTRY_INDEED,
                 "verbose": 0,
             }
@@ -114,7 +124,7 @@ def filter_by_location(df: pd.DataFrame) -> pd.DataFrame:
 
 def fetch_all_jobs() -> pd.DataFrame:
     """
-    Run all search query + location combinations and return
+    GENERAL MODE: Run all search query + location combinations and return
     a single deduplicated DataFrame of results, filtered for
     relevance and location.
     """
@@ -156,14 +166,93 @@ def fetch_all_jobs() -> pd.DataFrame:
     return combined
 
 
+def fetch_company_targeted_jobs() -> pd.DataFrame:
+    """
+    COMPANY-TARGETED MODE: Search for recruiting/TA roles at each
+    of the top 50 Bay Area tech companies. Uses company name in
+    the search query for precision.
+
+    Runs with human-like pacing to avoid rate limiting.
+    """
+    all_jobs = []
+    total_companies = len(config.TARGET_COMPANIES)
+    batch_size = 25
+
+    for i, company in enumerate(config.TARGET_COMPANIES, 1):
+        print(f"\n  [{i}/{total_companies}] 🏢 {company}")
+
+        for search_term in config.COMPANY_SEARCH_TERMS:
+            query = f"{search_term} {company}"
+            print(f"    Searching: '{query}'...")
+
+            df = fetch_jobs_for_query(
+                search_term=query,
+                location="San Francisco Bay Area, CA",
+                hours_old=config.COMPANY_HOURS_OLD,
+            )
+
+            if not df.empty:
+                # Tag the source company for tracking
+                df["target_company"] = company
+                print(f"      Found {len(df)} raw jobs")
+                all_jobs.append(df)
+            else:
+                print(f"      No jobs found")
+
+            # Human-like pacing: randomized wait between queries
+            wait_time = random.uniform(2, 5)
+            time.sleep(wait_time)
+
+        # After every batch of 25 companies, take a longer pause
+        if i % batch_size == 0 and i < total_companies:
+            pause = random.uniform(30, 60)
+            print(f"\n  ⏸  Batch pause ({pause:.0f}s) to avoid rate limits...")
+            time.sleep(pause)
+
+    if not all_jobs:
+        print("No jobs found across company-targeted searches.")
+        return pd.DataFrame()
+
+    # Combine all results
+    combined = pd.concat(all_jobs, ignore_index=True)
+
+    # Deduplicate by job_url
+    before_dedup = len(combined)
+    combined = combined.drop_duplicates(subset=["job_url"], keep="first")
+    after_dedup = len(combined)
+
+    if before_dedup != after_dedup:
+        print(f"\n  Removed {before_dedup - after_dedup} duplicate listings")
+
+    print(f"\nTotal unique jobs before filtering: {len(combined)}")
+
+    # ── Apply relevance filters ──────────────────────────────────
+    print("\n🎯 Applying relevance filters...")
+    combined = filter_by_title_relevance(combined)
+    combined = filter_by_location(combined)
+
+    print(f"\nTotal relevant jobs after filtering: {len(combined)}")
+    return combined
+
+
 if __name__ == "__main__":
-    # Quick test: run the scraper standalone
+    import sys
+    mode = sys.argv[1] if len(sys.argv) > 1 else "general"
+
     print("=" * 60)
-    print("JOB SCRAPER - TEST RUN")
+    print(f"JOB SCRAPER - TEST RUN (mode: {mode})")
     print("=" * 60)
-    jobs = fetch_all_jobs()
+
+    if mode == "company":
+        jobs = fetch_company_targeted_jobs()
+    else:
+        jobs = fetch_all_jobs()
+
     if not jobs.empty:
         print("\nSample results:")
-        print(jobs[["site", "title", "company", "location", "job_url"]].head(10).to_string())
+        cols = ["site", "title", "company", "location", "job_url"]
+        if "target_company" in jobs.columns:
+            cols.insert(0, "target_company")
+        print(jobs[cols].head(10).to_string())
     else:
         print("No jobs found.")

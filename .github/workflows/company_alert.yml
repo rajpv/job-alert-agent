@@ -1,26 +1,18 @@
-name: Job Alert Agent
+name: Company-Targeted Job Alert
 
 on:
   schedule:
-    # General search: runs every 30 minutes
-    - cron: '*/30 * * * *'
-  workflow_dispatch:
-    inputs:
-      mode:
-        description: 'Search mode: general or company'
-        required: false
-        default: 'general'
-        type: choice
-        options:
-          - general
-          - company
+    # Runs once daily at 8:00 AM Pacific (15:00 UTC)
+    - cron: '0 15 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
 
 permissions:
   contents: write
 
 jobs:
-  scrape-and-alert:
+  company-search:
     runs-on: ubuntu-latest
+    timeout-minutes: 60  # Company search takes longer (50 companies)
 
     steps:
       - name: Checkout repository
@@ -50,18 +42,16 @@ jobs:
           restore-keys: |
             seen-jobs-
 
-      - name: Run Job Alert Agent
+      - name: Run Company-Targeted Search
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-        run: |
-          MODE="${{ github.event.inputs.mode || 'general' }}"
-          python main.py --mode $MODE
+        run: python main.py --mode company
 
       - name: Commit updated state
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add data/seen_jobs.json
-          git diff --staged --quiet || git commit -m "Update seen jobs state [skip ci]"
+          git diff --staged --quiet || git commit -m "Update seen jobs state (company search) [skip ci]"
           git push

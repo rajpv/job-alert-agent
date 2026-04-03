@@ -36,6 +36,16 @@ def build_email_html(jobs_df: pd.DataFrame) -> str:
             .job-title {{ font-size: 16px; font-weight: bold; color: #2b6cb0; margin: 0 0 4px 0; }}
             .company {{ font-size: 14px; color: #4a5568; margin: 0 0 4px 0; }}
             .details {{ font-size: 13px; color: #718096; margin: 0; }}
+            .target-tag {{
+                display: inline-block;
+                background: #f6e05e;
+                color: #744210;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: bold;
+                margin-top: 4px;
+            }}
             .apply-btn {{
                 display: inline-block;
                 background: #3182ce;
@@ -50,7 +60,7 @@ def build_email_html(jobs_df: pd.DataFrame) -> str:
         </style>
     </head>
     <body>
-        <h2>🔔 New Job Alert</h2>
+        <h2>New Job Alert</h2>
         <div class="summary">
             <strong>{job_count} new posting{"s" if job_count != 1 else ""}</strong> found on {timestamp}
         </div>
@@ -72,13 +82,23 @@ def build_email_html(jobs_df: pd.DataFrame) -> str:
             except Exception:
                 date_str = str(date_posted)
 
+        # Check for target company tag (from company-targeted searches)
+        target_company = job.get("target_company", None)
+        target_html = ""
+        if pd.notna(target_company) and str(target_company).strip():
+            target_html = f'<span class="target-tag">Target: {target_company}</span>'
+
         html += f"""
         <div class="job-card">
             <p class="job-title">{title}</p>
             <p class="company">{company}</p>
-            <p class="details">📍 {location} &nbsp;|&nbsp; 🌐 {site}
-            {"&nbsp;|&nbsp; 📅 " + date_str if date_str else ""}</p>
-            <a class="apply-btn" href="{job_url}" target="_blank">View & Apply →</a>
+            <p class="details">
+                📍 {location} &nbsp;|&nbsp; 🌐 {site}
+                {"&nbsp;|&nbsp; 📅 " + date_str if date_str else ""}
+            </p>
+            {target_html}
+            <br>
+            <a class="apply-btn" href="{job_url}" target="_blank">View & Apply</a>
         </div>
         """
 
@@ -93,7 +113,7 @@ def build_email_html(jobs_df: pd.DataFrame) -> str:
     return html
 
 
-def send_email_alert(jobs_df: pd.DataFrame) -> bool:
+def send_email_alert(jobs_df: pd.DataFrame, subject: str = None) -> bool:
     """
     Send an email alert with the new job postings.
     Returns True if email was sent successfully.
@@ -113,7 +133,9 @@ def send_email_alert(jobs_df: pd.DataFrame) -> bool:
 
     # Build the email
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🔔 Job Alert: {len(jobs_df)} New Posting{'s' if len(jobs_df) != 1 else ''}"
+    if subject is None:
+        subject = f"Job Alert: {len(jobs_df)} New Posting{'s' if len(jobs_df) != 1 else ''}"
+    msg["Subject"] = subject
     msg["From"] = sender_email
     msg["To"] = config.RECIPIENT_EMAIL
 
@@ -126,7 +148,7 @@ def send_email_alert(jobs_df: pd.DataFrame) -> bool:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(sender_email, app_password)
             server.sendmail(sender_email, config.RECIPIENT_EMAIL, msg.as_string())
-        print(f"✅ Email sent to {config.RECIPIENT_EMAIL} with {len(jobs_df)} jobs")
+        print(f"Email sent to {config.RECIPIENT_EMAIL} with {len(jobs_df)} jobs")
         return True
     except smtplib.SMTPAuthenticationError:
         print("ERROR: Gmail authentication failed.")
@@ -151,6 +173,7 @@ if __name__ == "__main__":
         "location": ["San Francisco, CA", "Remote"],
         "job_url": ["https://linkedin.com/jobs/123", "https://indeed.com/jobs/456"],
         "date_posted": ["2026-04-02", "2026-04-02"],
+        "target_company": ["Google", pd.NA],
     }
     sample_df = pd.DataFrame(sample_data)
 

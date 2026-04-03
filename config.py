@@ -123,6 +123,80 @@ LOCATION_MUST_MATCH = [
     "ca",
 ]
 
+# ─── Top 50 Bay Area Tech Companies ──────────────────────────────────
+# Company-targeted searches run daily to specifically check these companies
+
+TARGET_COMPANIES = [
+    # Tier 1 - Mega Cap
+    "Google",
+    "Apple",
+    "Meta",
+    "NVIDIA",
+    "Salesforce",
+    "Adobe",
+    "Oracle",
+    "Tesla",
+    "Broadcom",
+    "Cisco",
+    # Tier 2 - Large Cap / Major Employers
+    "Intel",
+    "Uber",
+    "LinkedIn",
+    "Visa",
+    "Intuit",
+    "ServiceNow",
+    "Palo Alto Networks",
+    "Synopsys",
+    "AMD",
+    "PayPal",
+    # Tier 3 - High Growth / Well-Known
+    "OpenAI",
+    "Anthropic",
+    "DoorDash",
+    "Pinterest",
+    "Snap",
+    "X",
+    "Palantir",
+    "Zoom",
+    "Block",
+    "Stripe",
+    # Tier 4 - Notable / Rising
+    "Airbnb",
+    "Snowflake",
+    "Databricks",
+    "Figma",
+    "Ripple",
+    "Scale AI",
+    "Perplexity",
+    "Samsara",
+    "Cloudflare",
+    "Twilio",
+    # Tier 5 - Established / Specialized
+    "Splunk",
+    "VMware",
+    "Workday",
+    "Fortinet",
+    "Juniper Networks",
+    "Nutanix",
+    "Confluent",
+    "HashiCorp",
+    "Datadog",
+    "Toast",
+]
+
+# Simplified search terms for company-targeted mode
+# (fewer terms since we're combining with company name)
+COMPANY_SEARCH_TERMS = [
+    "Recruiting Manager",
+    "Talent Acquisition Manager",
+    "Talent Acquisition Director",
+    "Recruiting Director",
+    "Head of Talent Acquisition",
+]
+
+# Hours lookback for company-targeted searches (daily run = 24h + buffer)
+COMPANY_HOURS_OLD = 48
+
 # ─── Email Settings ────────────────────────────────────────────────────
 
 RECIPIENT_EMAIL = "rajvaitalent@gmail.com"
