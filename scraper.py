@@ -1,7 +1,8 @@
 """
 Job Scraper Module
 Fetches job postings from LinkedIn, Indeed, and Google Jobs
-using the python-jobspy library.
+using the python-jobspy library, then filters for relevance
+and location.
 """
 
 import pandas as pd
@@ -46,10 +47,76 @@ def fetch_jobs_for_query(search_term: str, location: str) -> pd.DataFrame:
     return pd.DataFrame()
 
 
+def filter_by_title_relevance(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filter jobs to only include relevant recruiting/TA titles.
+    - Title MUST contain at least one keyword from TITLE_MUST_CONTAIN
+    - Title must NOT contain any keyword from TITLE_EXCLUDE
+    """
+    if df.empty or "title" not in df.columns:
+        return df
+
+    must_contain = config.TITLE_MUST_CONTAIN
+    exclude = config.TITLE_EXCLUDE
+
+    def is_relevant(title):
+        if pd.isna(title):
+            return False
+        title_lower = str(title).lower()
+
+        # Must contain at least one relevant keyword
+        has_relevant = any(kw in title_lower for kw in must_contain)
+        if not has_relevant:
+            return False
+
+        # Must NOT contain any excluded keyword
+        has_excluded = any(kw in title_lower for kw in exclude)
+        if has_excluded:
+            return False
+
+        return True
+
+    before = len(df)
+    df = df[df["title"].apply(is_relevant)].copy()
+    after = len(df)
+
+    if before != after:
+        print(f"    Title filter: {before} → {after} jobs ({before - after} removed)")
+
+    return df
+
+
+def filter_by_location(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filter jobs to only include those in the SF Bay Area or Remote.
+    Jobs with no location info are kept (benefit of the doubt).
+    """
+    if df.empty or "location" not in df.columns:
+        return df
+
+    allowed = config.LOCATION_MUST_MATCH
+
+    def location_matches(loc):
+        if pd.isna(loc) or str(loc).strip() == "":
+            return True  # Keep jobs with no location (benefit of the doubt)
+        loc_lower = str(loc).lower()
+        return any(kw in loc_lower for kw in allowed)
+
+    before = len(df)
+    df = df[df["location"].apply(location_matches)].copy()
+    after = len(df)
+
+    if before != after:
+        print(f"    Location filter: {before} → {after} jobs ({before - after} removed)")
+
+    return df
+
+
 def fetch_all_jobs() -> pd.DataFrame:
     """
     Run all search query + location combinations and return
-    a single deduplicated DataFrame of results.
+    a single deduplicated DataFrame of results, filtered for
+    relevance and location.
     """
     all_jobs = []
 
@@ -58,7 +125,7 @@ def fetch_all_jobs() -> pd.DataFrame:
             print(f"  Searching: '{search_term}' in '{location}'...")
             df = fetch_jobs_for_query(search_term, location)
             if not df.empty:
-                print(f"    Found {len(df)} jobs")
+                print(f"    Found {len(df)} raw jobs")
                 all_jobs.append(df)
             else:
                 print(f"    No jobs found")
@@ -78,7 +145,14 @@ def fetch_all_jobs() -> pd.DataFrame:
     if before_dedup != after_dedup:
         print(f"  Removed {before_dedup - after_dedup} duplicate listings")
 
-    print(f"\nTotal unique jobs found: {len(combined)}")
+    print(f"\nTotal unique jobs before filtering: {len(combined)}")
+
+    # ── Apply relevance filters ──────────────────────────────────
+    print("\n🎯 Applying relevance filters...")
+    combined = filter_by_title_relevance(combined)
+    combined = filter_by_location(combined)
+
+    print(f"\nTotal relevant jobs after filtering: {len(combined)}")
     return combined
 
 

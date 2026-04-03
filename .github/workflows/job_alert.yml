@@ -6,6 +6,9 @@ on:
     - cron: '*/30 * * * *'
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
+permissions:
+  contents: write
+
 jobs:
   scrape-and-alert:
     runs-on: ubuntu-latest
@@ -32,7 +35,7 @@ jobs:
 
       - name: Load seen jobs state
         # Restore the seen_jobs.json from the previous run
-        # This uses a GitHub Actions artifact to persist state across runs
+        # This uses a GitHub Actions cache to persist state across runs
         uses: actions/cache@v4
         with:
           path: data/seen_jobs.json

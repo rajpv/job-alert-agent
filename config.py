@@ -35,6 +35,94 @@ RESULTS_WANTED = 25
 # Country for Indeed filtering
 COUNTRY_INDEED = "USA"
 
+# ─── Relevance Filtering ─────────────────────────────────────────────
+
+# Job title MUST contain at least one of these keywords (case-insensitive)
+# to be considered relevant
+TITLE_MUST_CONTAIN = [
+    "recruit",
+    "talent acquisition",
+    "talent manager",
+    "talent management",
+    "ta manager",
+    "ta director",
+    "hiring manager",
+    "staffing manager",
+    "staffing director",
+    "people acquisition",
+]
+
+# Job titles containing any of these keywords will be EXCLUDED
+TITLE_EXCLUDE = [
+    "intern",
+    "coordinator",
+    "assistant",
+    "specialist",      # too junior
+    "sourcer",
+    "recruiter",       # individual contributor, not manager
+    "sales",
+    "marketing",
+    "engineer",
+    "developer",
+    "nurse",
+    "physician",
+    "clinical",
+    "medical",
+    "accounting",
+    "finance",
+    "legal",
+    "custod",
+    "janitor",
+    "warehouse",
+    "driver",
+    "mechanic",
+    "technician",
+]
+
+# ─── Location Filtering ──────────────────────────────────────────────
+
+# Only keep jobs whose location matches one of these patterns (case-insensitive)
+# Jobs with no location info will also be kept (benefit of the doubt)
+LOCATION_MUST_MATCH = [
+    "san francisco",
+    "sf",
+    "bay area",
+    "oakland",
+    "san jose",
+    "palo alto",
+    "mountain view",
+    "sunnyvale",
+    "santa clara",
+    "redwood city",
+    "menlo park",
+    "fremont",
+    "berkeley",
+    "san mateo",
+    "cupertino",
+    "milpitas",
+    "hayward",
+    "pleasanton",
+    "walnut creek",
+    "concord",
+    "daly city",
+    "south san francisco",
+    "foster city",
+    "burlingame",
+    "san ramon",
+    "livermore",
+    "dublin",
+    "alameda",
+    "emeryville",
+    "remote",
+    "anywhere",
+    "united states",
+    "usa",
+    "us",
+    "hybrid",
+    "california",
+    "ca",
+]
+
 # ─── Email Settings ────────────────────────────────────────────────────
 
 RECIPIENT_EMAIL = "rajvaitalent@gmail.com"
