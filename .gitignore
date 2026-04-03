@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs (daily CSVs are local only)
+data/jobs_log_*.csv
+
+# Test files
+data/test_email.html
+
+# OS
+.DS_Store
+Thumbs.db
