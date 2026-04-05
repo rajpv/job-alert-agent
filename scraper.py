@@ -9,6 +9,7 @@ Supports two modes:
   - Company-targeted search: role + company name (daily)
 """
 
+import re
 import time
 import random
 import pandas as pd
@@ -98,52 +99,114 @@ def filter_by_title_relevance(df: pd.DataFrame) -> pd.DataFrame:
 
 def filter_by_location(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Filter jobs to only include those in the SF Bay Area or Remote (US).
-    - Location MUST match at least one allowed keyword
-    - Location must NOT match any blocked international keyword
-    - Jobs with no location info are EXCLUDED
+    WHITELIST-ONLY location filter.
+    A job is ONLY accepted if its location explicitly matches a known
+    US location. Everything else is rejected — no blocklist needed.
+
+    Logic:
+    1. No location → REJECT
+    2. Contains "remote" → only accept if also has US qualifier
+    3. Contains a Bay Area city name → ACCEPT
+    4. Contains a US state abbreviation (", CA", ", NY") → ACCEPT
+    5. Contains a US state full name → ACCEPT
+    6. Contains "united states" or "usa" → ACCEPT
+    7. Everything else → REJECT
     """
     if df.empty or "location" not in df.columns:
         return df
 
-    allowed = config.LOCATION_MUST_MATCH
-    blocked = config.LOCATION_BLOCKLIST
+    def _has_us_state_abbr(loc_lower):
+        """
+        Check if location contains a US state abbreviation like ', CA'
+        at the END of the string or followed by a space/comma.
+        Uses regex to avoid false matches like 'Alberta, Canada' matching ', CA'.
+        """
+        for abbr in config.US_STATE_ABBREVIATIONS:
+            # Extract the 2-letter state code (e.g., 'ca' from ', ca')
+            state_code = abbr.strip().lstrip(','). strip()
+            # Match: comma + optional space + 2-letter code at end of string
+            # or followed by space/comma (not more letters)
+            pattern = rf',\s*{re.escape(state_code)}(?:\s*$|\s|,)'
+            if re.search(pattern, loc_lower):
+                return True
+        return False
 
-    def location_matches(loc):
-        # Exclude jobs with no location — too risky, often international
+    def _has_us_indicator(loc_lower):
+        """
+        Check if location has any US indicator:
+        state abbreviation, state name, Bay Area city, or US keyword.
+        """
+        if _has_us_state_abbr(loc_lower):
+            return True
+        for state in config.US_STATE_NAMES:
+            if state in loc_lower:
+                return True
+        for city in config.BAY_AREA_CITIES:
+            if city in loc_lower:
+                return True
+        for kw in config.US_KEYWORDS:
+            if kw in loc_lower:
+                return True
+        return False
+
+    def is_us_location(loc):
+        # Step 1: No location → reject
         if pd.isna(loc) or str(loc).strip() == "":
             return False
 
-        loc_lower = str(loc).lower()
+        loc_lower = str(loc).lower().strip()
 
-        # FIRST: check blocklist — if any blocked keyword is found, reject
-        if any(blk in loc_lower for blk in blocked):
+        # Step 2: Handle "remote" locations
+        if "remote" in loc_lower:
+            # Check for explicit US remote patterns
+            for pattern in config.REMOTE_US_PATTERNS:
+                if pattern in loc_lower:
+                    return True
+            # Check for any US indicator
+            if _has_us_indicator(loc_lower):
+                return True
+            # Bare "remote" with no US context → REJECT
             return False
 
-        # Handle bare "remote" without US qualifier — reject it
-        # Only allow "remote" if it also has a US indicator
-        if "remote" in loc_lower:
-            us_indicators = [
-                "us", "usa", "united states", "america",
-                "california", ", ca", "san francisco", "bay area",
-            ]
-            has_us = any(ind in loc_lower for ind in us_indicators)
-            if not has_us:
-                # Bare "remote" with no US context — reject
-                return False
+        # Step 3: Check Bay Area cities (primary target)
+        for city in config.BAY_AREA_CITIES:
+            if city in loc_lower:
+                return True
+
+        # Step 4: Check US state abbreviations with strict matching
+        if _has_us_state_abbr(loc_lower):
             return True
 
-        # THEN: check if location matches any allowed keyword
-        return any(kw in loc_lower for kw in allowed)
+        # Step 5: Check US state full names
+        for state in config.US_STATE_NAMES:
+            if state in loc_lower:
+                return True
+
+        # Step 6: Check US keywords ("united states", "usa")
+        for kw in config.US_KEYWORDS:
+            if kw in loc_lower:
+                return True
+
+        # Step 7: Everything else → REJECT
+        return False
 
     before = len(df)
-    rejected = df[~df["location"].apply(location_matches)]
+
+    # Log rejected locations for debugging
+    rejected = df[~df["location"].apply(is_us_location)]
     if not rejected.empty:
-        print(f"    Locations rejected:")
+        print(f"    Locations REJECTED (not US):")
         for loc in rejected["location"].unique():
             print(f"      ✗ {loc}")
 
-    df = df[df["location"].apply(location_matches)].copy()
+    # Log accepted locations
+    accepted = df[df["location"].apply(is_us_location)]
+    if not accepted.empty:
+        print(f"    Locations ACCEPTED (US confirmed):")
+        for loc in accepted["location"].unique():
+            print(f"      ✓ {loc}")
+
+    df = accepted.copy()
     after = len(df)
 
     if before != after:
