@@ -15,6 +15,7 @@ import config
 def build_email_html(jobs_df: pd.DataFrame) -> str:
     """
     Build a clean, readable HTML email body from the jobs DataFrame.
+    Displays posting date for all platforms (LinkedIn, Indeed, Google).
     """
     job_count = len(jobs_df)
     timestamp = datetime.now().strftime("%B %d, %Y at %I:%M %p")
@@ -36,6 +37,15 @@ def build_email_html(jobs_df: pd.DataFrame) -> str:
             .job-title {{ font-size: 16px; font-weight: bold; color: #2b6cb0; margin: 0 0 4px 0; }}
             .company {{ font-size: 14px; color: #4a5568; margin: 0 0 4px 0; }}
             .details {{ font-size: 13px; color: #718096; margin: 0; }}
+            .date-posted {{
+                display: inline-block;
+                background: #e6fffa;
+                color: #234e52;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: bold;
+            }}
             .target-tag {{
                 display: inline-block;
                 background: #f6e05e;
@@ -72,15 +82,33 @@ def build_email_html(jobs_df: pd.DataFrame) -> str:
         location = job.get("location", "N/A")
         site = str(job.get("site", "N/A")).capitalize()
         job_url = job.get("job_url", "#")
-        date_posted = job.get("date_posted", "")
 
-        # Format date if available
+        # ── Extract posting date from all available fields ──────────
         date_str = ""
-        if pd.notna(date_posted) and date_posted:
+        # Try date_posted first (primary field from jobspy)
+        date_posted = job.get("date_posted", None)
+        if pd.notna(date_posted) and str(date_posted).strip():
             try:
                 date_str = pd.to_datetime(date_posted).strftime("%b %d, %Y")
             except Exception:
-                date_str = str(date_posted)
+                date_str = str(date_posted).strip()
+
+        # If no date_posted, try listing_date or created_at as fallback
+        if not date_str:
+            for fallback_field in ["listing_date", "created_at", "posted_time"]:
+                fallback = job.get(fallback_field, None)
+                if pd.notna(fallback) and str(fallback).strip():
+                    try:
+                        date_str = pd.to_datetime(fallback).strftime("%b %d, %Y")
+                    except Exception:
+                        date_str = str(fallback).strip()
+                    break
+
+        # Build the date display HTML
+        if date_str:
+            date_html = f'<span class="date-posted">Posted: {date_str}</span>'
+        else:
+            date_html = '<span class="date-posted">Posted: Recently</span>'
 
         # Check for target company tag (from company-targeted searches)
         target_company = job.get("target_company", None)
@@ -93,8 +121,7 @@ def build_email_html(jobs_df: pd.DataFrame) -> str:
             <p class="job-title">{title}</p>
             <p class="company">{company}</p>
             <p class="details">
-                📍 {location} &nbsp;|&nbsp; 🌐 {site}
-                {"&nbsp;|&nbsp; 📅 " + date_str if date_str else ""}
+                📍 {location} &nbsp;|&nbsp; 🌐 {site} &nbsp;|&nbsp; {date_html}
             </p>
             {target_html}
             <br>
@@ -170,7 +197,7 @@ if __name__ == "__main__":
         "site": ["linkedin", "indeed"],
         "title": ["Recruiting Manager", "Senior TA Manager"],
         "company": ["Google", "Meta"],
-        "location": ["San Francisco, CA", "Remote"],
+        "location": ["San Francisco, CA", "Remote, US"],
         "job_url": ["https://linkedin.com/jobs/123", "https://indeed.com/jobs/456"],
         "date_posted": ["2026-04-02", "2026-04-02"],
         "target_company": ["Google", pd.NA],

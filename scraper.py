@@ -98,21 +98,51 @@ def filter_by_title_relevance(df: pd.DataFrame) -> pd.DataFrame:
 
 def filter_by_location(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Filter jobs to only include those in the SF Bay Area or Remote.
-    Jobs with no location info are kept (benefit of the doubt).
+    Filter jobs to only include those in the SF Bay Area or Remote (US).
+    - Location MUST match at least one allowed keyword
+    - Location must NOT match any blocked international keyword
+    - Jobs with no location info are EXCLUDED
     """
     if df.empty or "location" not in df.columns:
         return df
 
     allowed = config.LOCATION_MUST_MATCH
+    blocked = config.LOCATION_BLOCKLIST
 
     def location_matches(loc):
+        # Exclude jobs with no location — too risky, often international
         if pd.isna(loc) or str(loc).strip() == "":
-            return True  # Keep jobs with no location (benefit of the doubt)
+            return False
+
         loc_lower = str(loc).lower()
+
+        # FIRST: check blocklist — if any blocked keyword is found, reject
+        if any(blk in loc_lower for blk in blocked):
+            return False
+
+        # Handle bare "remote" without US qualifier — reject it
+        # Only allow "remote" if it also has a US indicator
+        if "remote" in loc_lower:
+            us_indicators = [
+                "us", "usa", "united states", "america",
+                "california", ", ca", "san francisco", "bay area",
+            ]
+            has_us = any(ind in loc_lower for ind in us_indicators)
+            if not has_us:
+                # Bare "remote" with no US context — reject
+                return False
+            return True
+
+        # THEN: check if location matches any allowed keyword
         return any(kw in loc_lower for kw in allowed)
 
     before = len(df)
+    rejected = df[~df["location"].apply(location_matches)]
+    if not rejected.empty:
+        print(f"    Locations rejected:")
+        for loc in rejected["location"].unique():
+            print(f"      ✗ {loc}")
+
     df = df[df["location"].apply(location_matches)].copy()
     after = len(df)
 
