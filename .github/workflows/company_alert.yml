@@ -1,9 +1,8 @@
 name: Company-Targeted Job Alert
 
 on:
-  schedule:
-    # Runs once daily at 8:00 AM Pacific (15:00 UTC)
-    - cron: '0 15 * * *'
+  # Triggered externally by Google Apps Script daily at 8 AM Pacific
+  # (GitHub's built-in cron was unreliable, so we use an external scheduler)
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 permissions:
