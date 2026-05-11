@@ -1,9 +1,8 @@
 name: Job Alert Agent
 
 on:
-  schedule:
-    # General search: runs every 30 minutes
-    - cron: '*/30 * * * *'
+  # Triggered externally by Google Apps Script every 30 minutes
+  # (GitHub's built-in cron was unreliable, so we use an external scheduler)
   workflow_dispatch:
     inputs:
       mode:
